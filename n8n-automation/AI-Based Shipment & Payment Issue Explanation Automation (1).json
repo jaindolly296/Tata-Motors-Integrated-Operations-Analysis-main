@@ -1,0 +1,144 @@
+{
+  "name": "AI-Based Shipment & Payment Issue Explanation Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shipment-issue",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -176
+      ],
+      "id": "26fbba05-918c-4ccb-b990-9e0460455eaa",
+      "name": "Webhook",
+      "webhookId": "897b0de2-7f08-4342-845a-f42ae578a26c"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    sd.SH_ID,\n    sd.C_ID,\n    sd.SH_CONTENT,\n    sd.SH_DOMAIN,\n    sd.SER_TYPE,\n    sd.SH_WEIGHT,\n    sd.SH_CHARGES,\n    sd.SR_ADDR,\n    sd.DS_ADDR,\n\n    st.Current_Status,\n    st.Sent_date,\n    st.Delivery_date,\n\n    pd.Payment_ID,\n    pd.AMOUNT,\n    pd.Payment_Status,\n    pd.Payment_Mode,\n    pd.Payment_Date,\n\n    ed.E_ID,\n    ed.E_NAME,\n    ed.E_DESIGNATION,\n    ed.E_BRANCH,\n\n    c.C_NAME,\n    c.C_EMAIL_ID,\n    c.C_TYPE,\n    c.C_ADDR,\n    c.C_CONT_NO,\n\n    m.M_ID,\n    m.Start_date,\n    m.End_date\n\nFROM Shipment_Details sd\n\nLEFT JOIN Status st\nON sd.SH_ID = st.SH_ID\n\nLEFT JOIN Payment_Details pd\nON sd.SH_ID = pd.SH_ID\n\nLEFT JOIN Customer c\nON sd.C_ID = c.C_ID\n\nLEFT JOIN Membership m\nON c.M_ID = m.M_ID\n\nLEFT JOIN employee_manages_shipment ems\nON sd.SH_ID = ems.Shipment_Sh_ID\n\nLEFT JOIN Employee_Details ed\nON ems.Employee_E_ID = ed.E_ID\n\nWHERE sd.SH_ID = $1;",
+        "options": {
+          "queryReplacement": "=={{ $json.body.shipment_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -224,
+        -48
+      ],
+      "id": "eb36a44c-b67d-49ac-82d7-a7febf41d265",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "xkfFOxU54gjb5GAR",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer Your API key"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a senior logistics operations analyst generating executive shipment insights.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate a professional shipment analysis report using the provided logistics data. Use professional corporate language, avoid robotic wording, avoid bullet points, avoid line breaks, avoid special formatting, and generate the entire response as one clean professional paragraph.\\n\\nShipment Details: Shipment ID {{$node['Execute a SQL query'].json['sh_id']}}, Shipment Domain {{$node['Execute a SQL query'].json['sh_domain']}}, Service Type {{$node['Execute a SQL query'].json['ser_type']}}, Shipment Weight {{$node['Execute a SQL query'].json['sh_weight']}}, Current Status {{$node['Execute a SQL query'].json['current_status']}}.\\n\\nPayment Details: Payment Status {{$node['Execute a SQL query'].json['payment_status']}}, Payment Mode {{$node['Execute a SQL query'].json['payment_mode']}}, Amount {{$node['Execute a SQL query'].json['amount']}}.\\n\\nEmployee Details: Employee {{$node['Execute a SQL query'].json['e_name']}}, Branch {{$node['Execute a SQL query'].json['e_branch']}}, Designation {{$node['Execute a SQL query'].json['e_designation']}}.\\n\\nCustomer Details: Customer {{$node['Execute a SQL query'].json['c_name']}}, Customer Type {{$node['Execute a SQL query'].json['c_type']}}.\\n\\nGenerate a concise executive-style logistics insight summary in under 90 words.\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 180\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        32,
+        -48
+      ],
+      "id": "0d28e0d4-1214-4ade-9322-e2ef7fbf21e4",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=={{\nJSON.stringify({\n  shipment_id: $node[\"Execute a SQL query\"].json[\"sh_id\"],\n  ai_response: $json[\"choices\"][0][\"message\"][\"content\"]\n})\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        -160
+      ],
+      "id": "0587b76f-5071-4e6d-ae14-1c92a1e9b4de",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6dc4ed75-b510-4971-b498-ae8063aacd27",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "80c6ff8bb12f520e1da33cb7f055d86cfa498beb03915bf050759f48a32dd6c6"
+  },
+  "id": "gYXUGTPDb2sZttkn",
+  "tags": []
+}
